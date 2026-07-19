@@ -92,7 +92,7 @@ function layout({ title, desc, urlPath, h1, hero, body, useTool }) {
 </main>
 <footer class="site-foot"><div class="wrap">
   <a href="${BASE}/">Home</a><a href="${BASE}/#calculators">All Calculators</a>
-  <span>· ${SITE} — free how-much-do-I-need calculators for home &amp; yard projects. Estimates only; confirm coverage with your supplier.</span>
+  <span>· ${SITE} — free how-much-do-I-need calculators for home &amp; yard projects. Estimates only; confirm coverage with your supplier. Part of <a href="https://elevatedprogress.com/">Elevated Progress</a>.</span>
 </div></footer>
 ${useTool ? `<script src="${BASE}/tool.js" defer></script>` : ""}
 </body>
