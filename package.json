@@ -1,0 +1,10 @@
+{
+  "name": "materialcalc",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static generator for the Material Calculators site",
+  "scripts": {
+    "build": "node generate.js",
+    "preview": "node server.js"
+  }
+}
