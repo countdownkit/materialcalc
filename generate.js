@@ -60,6 +60,40 @@ const sodFor = a => ({ rolls: Math.ceil(a * 1.05 / 10), pallets: r1(a / 450) });
 const tileFor = (a, size) => Math.ceil(a * 1.1 / size);
 const paverFor = (a, per) => Math.ceil(a * 1.05 * per);
 
+// ---- sizing math (keep in sync with assets/tool.js) ----------------------
+// Generator: running total + the single largest start-up surge determines peak.
+function gensetFor(keys) {
+  const sel = DATA.appliances.filter(a => keys.includes(a.key));
+  const running = sel.reduce((s, a) => s + a.run, 0);
+  const surge = Math.max(0, ...sel.map(a => Math.max(0, a.start - a.run)));
+  const peak = running + surge;
+  const size = DATA.generatorSizes.find(s => s >= peak * 1.1);
+  return { running, peak, size, standby: !size || peak > 9500 };
+}
+// Central AC scaled by house size for the preset generator pages (≈1 ton per 600 sq ft).
+function cenacFor(sqft) {
+  const tons = Math.min(5, Math.max(2, Math.round(sqft / 600)));
+  return { tons, run: 1200 * tons, start: 3000 * tons };
+}
+// AC: Energy Star area table ±10% for sun/shade, +4,000 BTU kitchens, +600/person over two.
+function btuFor(area, sun = "average", kitchen = false, people = 2) {
+  const row = DATA.btuTable.find(([max]) => area <= max) || DATA.btuTable[DATA.btuTable.length - 1];
+  let btu = row[1];
+  if (sun === "sunny") btu *= 1.1;
+  if (sun === "shaded") btu *= 0.9;
+  if (kitchen) btu += 4000;
+  btu += Math.max(0, people - 2) * 600;
+  return Math.round(btu / 500) * 500;
+}
+// Ceiling fan: blade span by room area (industry chart), downrod by ceiling height.
+function fanFor(area, ceilH = 8) {
+  const span = area <= 75 ? "29–36 in" : area <= 144 ? "36–42 in" : area <= 225 ? "44–50 in"
+    : area <= 400 ? "50–54 in" : "56–72 in (or two fans)";
+  const rod = ceilH <= 8 ? "flush mount (hugger)" : ceilH === 9 ? "6 in downrod"
+    : ceilH === 10 ? "12 in downrod" : ceilH <= 12 ? "24 in downrod" : "36 in or longer downrod";
+  return { span, rod, cfm: Math.round(area * 35 / 100) * 100 };
+}
+
 // ---- html layout --------------------------------------------------------
 function layout({ title, desc, urlPath, h1, hero, body, useTool }) {
   const canonical = DOMAIN + BASE + urlPath;
@@ -361,6 +395,174 @@ for (const t of AREA_TOOLS) {
     writePage(urlPath, layout({
       title: `${h1} (With Waste Included)`, desc: t.desc(a), urlPath, h1,
       hero: answerHero(hero.big, hero.unit, hero.sub),
+      body,
+    }));
+  }
+}
+
+// -- generator sizing --
+{
+  const calcHref = `/generator-size-calculator/`;
+  CALCS.push({ href: calcHref, emoji: "⚡", label: "Generator Size Calculator" });
+  const houseLinks = DATA.houseSizes.map(s => ({ href: `/generator-for-a-${s}-sq-ft-house/`, label: `${s.toLocaleString("en-US")} sq ft` }));
+
+  const checks = DATA.appliances.map(a =>
+    `<label><input type="checkbox" data-in="${a.key}"${a.on ? " checked" : ""}> ${a.label} <small>(${a.run.toLocaleString("en-US")}W${a.start ? " / " + a.start.toLocaleString("en-US") + "W start" : ""})</small></label>`).join("\n    ");
+  const title = `Generator Size Calculator — What Size Generator Do I Need?`;
+  const desc = `Check off what you want to power during an outage and get running watts, peak starting watts, and the portable or standby generator size to buy.`;
+  const tool = `<div class="tool" data-calc="genset" data-config='${JSON.stringify({ appliances: DATA.appliances, sizes: DATA.generatorSizes })}'>
+    <label>What do you want to keep running during an outage?</label>
+    <div class="checks">${checks}</div>
+    <div class="tool-out" data-out></div>
+  </div>`;
+  const body = `${tool}
+  <div class="prose"><p>Generator sizing is two numbers: <b>running watts</b> (everything on at once) and <b>starting watts</b> — motors like refrigerators, pumps, and AC compressors briefly draw 2–3× their running load when they kick on. Your generator needs to handle the running total plus the single largest start-up surge, with about 10% headroom.</p>
+  <p>Wattages above are typical values — check the nameplate on your actual appliances. Anything over about 9,500 watts usually means a home standby generator (10–26 kW) with a transfer switch rather than a portable. Never backfeed a panel: use a transfer switch or interlock, installed by an electrician.</p></div>
+  <h2>By house size</h2>
+  ${grid(houseLinks)}
+  <h2>Other calculators</h2>
+  ${grid(CALC_LINKS_PLACEHOLDER())}`;
+  writePage(calcHref, layout({ title, desc, urlPath: calcHref, h1: "Generator Size Calculator", hero: "", body, useTool: true }));
+
+  const ESSENTIALS = ["fridge", "furnace", "lights", "tv", "microwave"];
+  const COMFORT = [...ESSENTIALS, "sump", "freezer", "winac"];
+  for (const sqft of DATA.houseSizes) {
+    const urlPath = `/generator-for-a-${sqft}-sq-ft-house/`;
+    const disp = sqft.toLocaleString("en-US");
+    const ess = gensetFor(ESSENTIALS);
+    const com = gensetFor(COMFORT);
+    const ac = cenacFor(sqft);
+    const whole = gensetFor(COMFORT.filter(k => k !== "winac"));
+    const wholeRunning = whole.running + ac.run + 4500; // + central AC + electric water heater
+    const wholePeak = wholeRunning + Math.max(ac.start - ac.run, 1550);
+    const h1 = `What Size Generator for a ${disp} Sq Ft House?`;
+    const title = `${h1} (Watts & Sizing Table)`;
+    const desc = `Essentials in a ${disp} sq ft house need a ${ess.size.toLocaleString("en-US")}W portable generator; adding comfort loads takes ${com.size ? com.size.toLocaleString("en-US") + "W" : "a standby unit"}, and whole-house with central AC needs a ${Math.ceil(wholePeak / 1000)} kW+ standby. Full wattage table inside.`;
+    const rows = [
+      ["Essentials (fridge, furnace fan, lights, TV, microwave)", `${ess.running.toLocaleString("en-US")}W`, `${ess.peak.toLocaleString("en-US")}W`, `${ess.size.toLocaleString("en-US")}W portable`],
+      ["Comfort (+ sump pump, freezer, window AC)", `${com.running.toLocaleString("en-US")}W`, `${com.peak.toLocaleString("en-US")}W`, com.size ? `${com.size.toLocaleString("en-US")}W portable` : "standby"],
+      [`Whole house (central AC ≈ ${ac.tons} ton for ${disp} sq ft + electric water heater)`, `${wholeRunning.toLocaleString("en-US")}W`, `${wholePeak.toLocaleString("en-US")}W`, `${Math.ceil(wholePeak / 1000)}–${Math.ceil(wholePeak / 1000) + 4} kW standby`],
+    ];
+    const body = `
+  ${table(["What you're powering", "Running watts", "Peak (starting) watts", "Generator to buy"], rows)}
+  <div class="prose">
+    <p>House square footage matters mainly through the <b>central air conditioner</b> — a ${disp} sq ft house typically runs a ${ac.tons}-ton unit (≈${ac.run.toLocaleString("en-US")}W running, ${ac.start.toLocaleString("en-US")}W starting). Everything else — refrigerator, lights, electronics — is about the same in any house.</p>
+    <p>Most homeowners are well served by the middle row: a 7,500–9,500W portable covers essentials plus comfort loads for a fraction of a standby's cost. Go standby when you want central AC on backup power or automatic transfer. Use the <a href="${BASE}/generator-size-calculator/">generator calculator</a> to check off your exact appliances.</p>
+  </div>
+  <h2>Other house sizes</h2>
+  ${grid(houseLinks.filter(l => l.href !== urlPath))}
+  ${grid([{ href: calcHref, emoji: "🧮", label: "Exact Generator Calculator" }])}`;
+    writePage(urlPath, layout({
+      title, desc, urlPath, h1,
+      hero: answerHero(com.size.toLocaleString("en-US"), "watt portable (essentials + comfort)", `covers ${com.running.toLocaleString("en-US")}W running with ${com.peak.toLocaleString("en-US")}W peak — see table for essentials-only and whole-house standby`),
+      body,
+    }));
+  }
+}
+
+// -- AC BTU sizing --
+{
+  const calcHref = `/ac-btu-calculator/`;
+  CALCS.push({ href: calcHref, emoji: "❄️", label: "AC BTU Calculator" });
+  const areaLinks = DATA.acRoomAreas.map(a => ({ href: `/ac-for-a-${a}-sq-ft-room/`, label: `${a} sq ft` }));
+
+  const title = `AC BTU Calculator — What Size Air Conditioner Do I Need?`;
+  const desc = `Air conditioner sizing calculator: room size, sun exposure, kitchen, and occupancy — get the right BTU, window unit size, and central-air tonnage.`;
+  const tool = `<div class="tool" data-calc="acbtu" data-config='${JSON.stringify({ table: DATA.btuTable })}'>
+    <div class="row">${num("L", "Room length (ft)", 15)}${num("W", "Room width (ft)", 20)}</div>
+    <div class="row">${sel("S", "Sun exposure", [{ v: "average", t: "Average" }, { v: "sunny", t: "Very sunny (+10%)" }, { v: "shaded", t: "Shaded (−10%)" }], "average")}${sel("K", "Is it a kitchen?", [{ v: 0, t: "No" }, { v: 1, t: "Yes (+4,000 BTU)" }], 0)}${num("P", "People usually in room", 2, 1)}</div>
+    <div class="tool-out" data-out></div>
+  </div>`;
+  const body = `${tool}
+  <div class="prose"><p>Air conditioners are sized by the Energy Star area table, then adjusted: add 10% for very sunny rooms, subtract 10% for shaded ones, add 4,000 BTU for kitchens, and add 600 BTU per person beyond two.</p>
+  <p><b>Bigger is not better.</b> An oversized AC short-cycles: it cools the air fast but shuts off before dehumidifying, leaving the room cold and clammy — and wears itself out. Size to the table, not "one up to be safe."</p></div>
+  <h2>By room size</h2>
+  ${grid(areaLinks)}
+  <h2>Other calculators</h2>
+  ${grid(CALC_LINKS_PLACEHOLDER())}`;
+  writePage(calcHref, layout({ title, desc, urlPath: calcHref, h1: "AC BTU Calculator", hero: "", body, useTool: true }));
+
+  for (const a of DATA.acRoomAreas) {
+    const urlPath = `/ac-for-a-${a}-sq-ft-room/`;
+    const base = btuFor(a);
+    const h1 = `What Size AC for a ${a} Sq Ft Room?`;
+    const title = `${h1} (BTU Chart)`;
+    const desc = `A ${a} sq ft room needs about ${base.toLocaleString("en-US")} BTU — more if it's sunny (${btuFor(a, "sunny").toLocaleString("en-US")}) or a kitchen (${btuFor(a, "average", true).toLocaleString("en-US")}). Window, portable, and central sizing inside.`;
+    const rows = [
+      ["Standard room", `${base.toLocaleString("en-US")} BTU`],
+      ["Very sunny room (+10%)", `${btuFor(a, "sunny").toLocaleString("en-US")} BTU`],
+      ["Shaded room (−10%)", `${btuFor(a, "shaded").toLocaleString("en-US")} BTU`],
+      ["Kitchen (+4,000)", `${btuFor(a, "average", true).toLocaleString("en-US")} BTU`],
+      ["Room sleeping/seating 4 people", `${btuFor(a, "average", false, 4).toLocaleString("en-US")} BTU`],
+      ["Central air equivalent", `${r1(base / 12000)} tons`],
+    ];
+    const body = `
+  ${table(["Situation", "AC size to buy"], rows)}
+  <div class="prose">
+    <p>These figures follow the Energy Star sizing chart. For <b>portable ACs</b>, compare using the SACC (DOE) rating on the box, which runs 40–50% below the marketing BTU number — a ${a} sq ft room wants roughly ${Math.round(base * 0.65 / 500) * 500} SACC BTU.</p>
+    <p>An oversized unit short-cycles and leaves the room clammy; undersized runs nonstop and never catches up on hot afternoons. When between sizes, round up only for sunny rooms, top floors, or poor insulation.</p>
+  </div>
+  <h2>Other room sizes</h2>
+  ${grid(areaLinks.filter(l => l.href !== urlPath))}
+  ${grid([{ href: calcHref, emoji: "🧮", label: "Exact AC Calculator" }])}`;
+    writePage(urlPath, layout({
+      title, desc, urlPath, h1,
+      hero: answerHero(base.toLocaleString("en-US"), "BTU", `for a standard ${a} sq ft room — see the table for sun, kitchen, and occupancy adjustments`),
+      body,
+    }));
+  }
+}
+
+// -- ceiling fan sizing --
+{
+  const calcHref = `/ceiling-fan-size-calculator/`;
+  CALCS.push({ href: calcHref, emoji: "🌀", label: "Ceiling Fan Size Calculator" });
+  const roomLinks = DATA.rooms.map(s => ({ href: `/ceiling-fan-for-a-${s}-room/`, label: `${s.replace("x", "×")} room` }));
+
+  const title = `Ceiling Fan Size Calculator — Blade Span for Your Room`;
+  const desc = `Ceiling fan sizing: enter room dimensions and ceiling height to get the right blade span, airflow (CFM), and downrod length.`;
+  const tool = `<div class="tool" data-calc="fan" data-config='{}'>
+    <div class="row">${num("L", "Room length (ft)", 12)}${num("W", "Room width (ft)", 12)}${num("H", "Ceiling height (ft)", 8)}</div>
+    <div class="tool-out" data-out></div>
+  </div>`;
+  const body = `${tool}
+  <div class="prose"><p>Fan size follows room area: up to 75 sq ft takes a 29–36 inch fan, 76–144 sq ft a 36–42 inch, 145–225 sq ft a 44–50 inch, and 226–400 sq ft a 50–54 inch. Very large rooms want a 56 inch+ fan — or two smaller fans spaced evenly.</p>
+  <p>Blades should hang 8–9 feet above the floor: flush-mount on 8 ft ceilings, and add a downrod for anything taller. Compare airflow with the CFM rating, not blade count — three wide blades routinely out-move five narrow ones.</p></div>
+  <h2>By room size</h2>
+  ${grid(roomLinks)}
+  <h2>Other calculators</h2>
+  ${grid(CALC_LINKS_PLACEHOLDER())}`;
+  writePage(calcHref, layout({ title, desc, urlPath: calcHref, h1: "Ceiling Fan Size Calculator", hero: "", body, useTool: true }));
+
+  for (const s of DATA.rooms) {
+    const [L, W] = s.split("x").map(Number);
+    const a = L * W;
+    const urlPath = `/ceiling-fan-for-a-${s}-room/`;
+    const disp = `${L}×${W}`;
+    const v = fanFor(a);
+    const h1 = `What Size Ceiling Fan for a ${disp} Room?`;
+    const title = `${h1} (Blade Span & CFM)`;
+    const desc = `A ${disp} room (${a} sq ft) takes a ${v.span} ceiling fan moving about ${v.cfm.toLocaleString("en-US")} CFM. Downrod lengths by ceiling height inside.`;
+    const rows = [
+      ["Blade span", v.span],
+      ["Airflow to look for (high speed)", `≈ ${v.cfm.toLocaleString("en-US")} CFM or more`],
+      ["8 ft ceiling", "flush mount (hugger)"],
+      ["9 ft ceiling", "6 in downrod"],
+      ["10 ft ceiling", "12 in downrod"],
+      ["12 ft ceiling", "24 in downrod"],
+    ];
+    const body = `
+  ${table(["What", "Recommendation"], rows)}
+  <div class="prose">
+    <p>A ${disp} room is ${a} square feet, which lands in the ${v.span} bracket of the standard sizing chart. Blades need 18 inches of clearance from walls and 8–9 feet above the floor.</p>
+    <p>For bedrooms, check the fan's low-speed CFM and noise rating too — that's the speed it will actually run at night. DC-motor fans cost more but are near-silent and use about 70% less power.</p>
+  </div>
+  <h2>Other room sizes</h2>
+  ${grid(roomLinks.filter(l => l.href !== urlPath))}
+  ${grid([{ href: calcHref, emoji: "🧮", label: "Exact Ceiling Fan Calculator" }])}`;
+    writePage(urlPath, layout({
+      title, desc, urlPath, h1,
+      hero: answerHero(v.span.replace(" in", '"'), "blade span", `for ${a} sq ft — look for ${v.cfm.toLocaleString("en-US")}+ CFM on high`),
       body,
     }));
   }

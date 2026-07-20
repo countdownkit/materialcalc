@@ -55,6 +55,44 @@
       return `${fmt(Math.ceil(area * 1.05 * size.perSqFt))} × ${size.label} pavers
       <small>${fmt(area)} sq ft + 5% for cuts · base: ~${yd(area * (4 / 12) / 27)} yd³ gravel + ~${yd(area * (1 / 12) / 27)} yd³ sand</small>`;
     },
+    // Sizing math below mirrors generate.js — keep in sync.
+    genset(v, cfg) {
+      const sel = cfg.appliances.filter(a => v[a.key]);
+      if (!sel.length) return "Check off at least one appliance above.";
+      const running = sel.reduce((s, a) => s + a.run, 0);
+      const surge = Math.max(0, ...sel.map(a => Math.max(0, a.start - a.run)));
+      const peak = running + surge;
+      const size = cfg.sizes.find(s => s >= peak * 1.1);
+      const rec = size && peak <= 9500
+        ? `a ${fmt(size)}W portable generator`
+        : `a ${Math.ceil(peak / 1000)}–${Math.ceil(peak / 1000) + 4} kW home standby generator`;
+      return `${rec}
+      <small>${fmt(running)}W running · ${fmt(peak)}W peak with the largest motor start · sized with ~10% headroom — check nameplate watts on your actual appliances</small>`;
+    },
+    acbtu(v, cfg) {
+      const area = v.L * v.W;
+      if (!area) return null;
+      const row = cfg.table.find(t => area <= t[0]) || cfg.table[cfg.table.length - 1];
+      let btu = row[1];
+      if (v.S === "sunny") btu *= 1.1;
+      if (v.S === "shaded") btu *= 0.9;
+      if (+v.K) btu += 4000;
+      btu += Math.max(0, (v.P || 2) - 2) * 600;
+      btu = Math.round(btu / 500) * 500;
+      return `${fmt(btu)} BTU air conditioner
+      <small>${fmt(area)} sq ft · ≈ ${r1(btu / 12000)} tons central-air equivalent · portable ACs: look for ≈ ${fmt(Math.round(btu * 0.65 / 500) * 500)} SACC BTU</small>`;
+    },
+    fan(v) {
+      const area = v.L * v.W;
+      if (!area) return null;
+      const span = area <= 75 ? "29–36 in" : area <= 144 ? "36–42 in" : area <= 225 ? "44–50 in"
+        : area <= 400 ? "50–54 in" : "56–72 in (or two fans)";
+      const h = v.H || 8;
+      const rod = h <= 8 ? "flush mount (hugger fan)" : h === 9 ? "6 in downrod"
+        : h === 10 ? "12 in downrod" : h <= 12 ? "24 in downrod" : "36 in or longer downrod";
+      return `${span} blade span
+      <small>${fmt(area)} sq ft · look for ≈ ${fmt(Math.round(area * 35 / 100) * 100)}+ CFM on high · ${h} ft ceiling → ${rod}</small>`;
+    },
   };
 
   document.querySelectorAll(".tool[data-calc]").forEach(tool => {
@@ -65,7 +103,8 @@
     function run() {
       const v = {};
       inputs.forEach(el => {
-        v[el.dataset.in] = el.tagName === "SELECT" && isNaN(+el.value) ? el.value : +el.value;
+        v[el.dataset.in] = el.type === "checkbox" ? el.checked
+          : el.tagName === "SELECT" && isNaN(+el.value) ? el.value : +el.value;
       });
       const res = CALCS[type] && CALCS[type](v, cfg);
       out.innerHTML = res || "";

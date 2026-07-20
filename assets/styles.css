@@ -74,6 +74,12 @@ input, select { width: 100%; padding: 10px 12px; font-size: 16px; border: 1px so
 .tool-out { font-size: 18px; font-weight: 700; color: var(--pop); margin-top: 6px; min-height: 28px; }
 .tool-out small { display: block; font-weight: 500; color: var(--muted); font-size: 14px; margin-top: 4px; }
 
+/* appliance checklist (generator calculator) */
+.checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 7px 16px; margin: 6px 0 14px; }
+.checks label { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 14px; color: var(--ink); margin: 0; cursor: pointer; }
+.checks input { width: auto; margin: 0; accent-color: var(--accent); }
+.checks small { color: var(--muted); font-weight: 400; }
+
 /* link grids */
 h2 { font-size: 20px; margin: 30px 0 12px; letter-spacing: -.01em; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }

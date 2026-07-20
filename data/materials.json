@@ -65,5 +65,25 @@
     { "label": "6×6 in", "perSqFt": 4 },
     { "label": "6×9 in", "perSqFt": 2.67 },
     { "label": "12×12 in", "perSqFt": 1 }
-  ]
+  ],
+  "houseSizes": [1000, 1200, 1500, 1800, 2000, 2500, 3000, 3500, 4000],
+  "acRoomAreas": [100, 150, 200, 250, 300, 350, 400, 500, 600, 800, 1000, 1500],
+  "appliances": [
+    { "key": "fridge", "label": "Refrigerator/freezer", "run": 700, "start": 2200, "on": true },
+    { "key": "furnace", "label": "Furnace blower fan (gas heat)", "run": 800, "start": 2350, "on": true },
+    { "key": "lights", "label": "Lights (LED, most of house)", "run": 300, "start": 0, "on": true },
+    { "key": "tv", "label": "TV, internet & electronics", "run": 400, "start": 0, "on": true },
+    { "key": "microwave", "label": "Microwave", "run": 1000, "start": 0, "on": true },
+    { "key": "sump", "label": "Sump pump (½ HP)", "run": 1050, "start": 2200, "on": false },
+    { "key": "well", "label": "Well pump (1 HP)", "run": 2000, "start": 4000, "on": false },
+    { "key": "winac", "label": "Window AC (10,000 BTU)", "run": 1200, "start": 3600, "on": false },
+    { "key": "cenac", "label": "Central AC (3 ton)", "run": 3800, "start": 9000, "on": false },
+    { "key": "waterheater", "label": "Electric water heater", "run": 4500, "start": 0, "on": false },
+    { "key": "freezer", "label": "Chest freezer", "run": 500, "start": 1500, "on": false },
+    { "key": "washer", "label": "Washing machine", "run": 1150, "start": 2250, "on": false },
+    { "key": "spaceheater", "label": "Space heater", "run": 1500, "start": 0, "on": false },
+    { "key": "coffee", "label": "Coffee maker", "run": 1000, "start": 0, "on": false }
+  ],
+  "generatorSizes": [2200, 3500, 4500, 5500, 6500, 7500, 9500, 12000, 15000],
+  "btuTable": [[150, 5000], [250, 6000], [300, 7000], [350, 8000], [400, 9000], [450, 10000], [550, 12000], [700, 14000], [1000, 18000], [1200, 21000], [1400, 23000], [1500, 24000], [2000, 30000], [2500, 34000]]
 }
