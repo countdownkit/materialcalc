@@ -110,6 +110,8 @@ function layout({ title, desc, urlPath, h1, hero, body, useTool }) {
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="${BASE}/styles.css">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5580575158570188" crossorigin="anonymous"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-TJY4TRRKD6"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-TJY4TRRKD6');</script>
 </head>
 <body>
 <header class="site-head"><div class="wrap">
